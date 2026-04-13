@@ -11,7 +11,7 @@ This project provides a framework for building intelligent Open Street Map
 and search concepts from the AIMA library in a non-trivial
 application area and provide an interesting coding environment for student
 projects. Typical programming challenges include:
-* Extend the [RoutePlannerOsmApp](https://github.com/aimacode/aima-java/blob/AIMA3e/aimax-osm/src/main/java/aimax/osm/gui/fx/applications/RoutePlannerOsmApp.java) and provide additional options, e.g. to optimize
+* Extend the [ExtendedRoutePlannerOsmApp](https://github.com/aimacode/aima-java/blob/AIMA3e/aimax-osm/src/main/java/aimax/osm/gui/fx/applications/ExtendedRoutePlannerOsmApp.java) and provide additional options, e.g. to optimize
   time for a driver, to optimize fun for a cyclist, ...
 * Extend the [OnlineAgentOsmApp](https://github.com/aimacode/aima-java/blob/AIMA3e/aimax-osm/src/main/java/aimax/osm/gui/fx/applications/OnlineAgentOsmApp.java) and add variants of the original [LRTAStar](https://github.com/aimacode/aima-java/blob/AIMA3e/aima-core/src/main/java/aima/core/search/online/LRTAStarAgent.java)-based
   agent which try to perform better than the original in this special environment, e.g.
