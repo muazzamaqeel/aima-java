@@ -1,3 +1,5 @@
+package aqeel.osm.routing;
+
 import aima.core.search.framework.Node;
 import aima.core.search.framework.SearchForActions;
 import aima.core.search.framework.problem.Problem;
