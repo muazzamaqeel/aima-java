@@ -21,6 +21,12 @@ import java.util.List;
 
 // VM options (Java>8): --module-path ${PATH_TO_FX} --add-modules javafx.controls,javafx.fxml
 
+/**
+ * Integrable application which demonstrates how different kinds of vacuum
+ * cleaner agents behave in a two square environment.
+ *
+ * @author Ruediger Lunde
+ */
 public class MyVacuumApp extends IntegrableApplication {
 
     public static void main(String[] args) {
@@ -39,7 +45,10 @@ public class MyVacuumApp extends IntegrableApplication {
     public String getTitle() {
         return "Vacuum Agent App";
     }
-
+    /**
+     * Defines state view, parameters, and call-back functions and calls the
+     * simulation pane builder to create layout and controller objects.
+     */
     @Override
     public Pane createRootPane() {
         BorderPane root = new BorderPane();
@@ -65,9 +74,12 @@ public class MyVacuumApp extends IntegrableApplication {
         return root;
     }
 
+    /**
+     * Is called after each parameter selection change.
+     */
     protected List<Parameter> createParameters() {
 
-        // ✅ ADDED: Row Environment option
+        // Muazzam: Row Environment option
         Parameter p1 = new Parameter(PARAM_ENV,
                 "Row Environment (8 squares)",   // NEW
                 "A/B Deterministic Environment",
@@ -75,7 +87,7 @@ public class MyVacuumApp extends IntegrableApplication {
                 "Small Maze Environment",
                 "Maze Environment");
 
-        // ✅ ADDED: MyVacuumAgent option
+        // Muazzam: MyVacuumAgent option
         Parameter p2 = new Parameter(PARAM_AGENT,
                 "MyVacuumAgent",                 // NEW
                 "TableDrivenVacuumAgent",
@@ -91,7 +103,7 @@ public class MyVacuumApp extends IntegrableApplication {
     @Override
     public void initialize() {
 
-        // ✅ UPDATED: shifted indices because we added new option
+        // Muazzam : shifted indices because we added new option
         switch (taskPaneCtrl.getParamValueIndex(PARAM_ENV)) {
             case 0:
                 env = new RowVacuumEnvironment(8);  // YOUR ENVIRONMENT
@@ -113,7 +125,7 @@ public class MyVacuumApp extends IntegrableApplication {
         switch (taskPaneCtrl.getParamValueIndex(PARAM_AGENT)) {
 
             case 0:
-                agent = new MyVacuumAgent();   // ✅ YOUR AGENT
+                agent = new MyVacuumAgent();   // Muazzam
                 break;
             case 1:
                 agent = new TableDrivenVacuumAgent();
@@ -142,6 +154,9 @@ public class MyVacuumApp extends IntegrableApplication {
         }
     }
 
+    /**
+     * Starts the experiment.
+     */
     public void startExperiment() {
 
         if (agent instanceof NondeterministicSearchAgent) {
