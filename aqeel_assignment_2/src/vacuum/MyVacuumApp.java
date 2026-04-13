@@ -21,13 +21,7 @@ import java.util.List;
 
 // VM options (Java>8): --module-path ${PATH_TO_FX} --add-modules javafx.controls,javafx.fxml
 
-/**
- * Integrable application which demonstrates how different kinds of vacuum
- * cleaner agents behave in a two square environment.
- *
- * @author Ruediger Lunde
- */
-public class VacuumAgentApp extends IntegrableApplication {
+public class MyVacuumApp extends IntegrableApplication {
 
     public static void main(String[] args) {
         launch(args);
@@ -46,10 +40,6 @@ public class VacuumAgentApp extends IntegrableApplication {
         return "Vacuum Agent App";
     }
 
-    /**
-     * Defines state view, parameters, and call-back functions and calls the
-     * simulation pane builder to create layout and controller objects.
-     */
     @Override
     public Pane createRootPane() {
         BorderPane root = new BorderPane();
@@ -76,53 +66,75 @@ public class VacuumAgentApp extends IntegrableApplication {
     }
 
     protected List<Parameter> createParameters() {
-        Parameter p1 = new Parameter(PARAM_ENV, "A/B Deterministic Environment",
-                "A/B Non-Deterministic Environment", "Small Maze Environment", "Maze Environment");
-        Parameter p2 = new Parameter(PARAM_AGENT, "TableDrivenVacuumAgent", "ReflexVacuumAgent",
-                "SimpleReflexVacuumAgent", "ModelBasedReflexVacuumAgent", "NondeterministicVacuumAgent",
+
+        // ✅ ADDED: Row Environment option
+        Parameter p1 = new Parameter(PARAM_ENV,
+                "Row Environment (8 squares)",   // NEW
+                "A/B Deterministic Environment",
+                "A/B Non-Deterministic Environment",
+                "Small Maze Environment",
+                "Maze Environment");
+
+        // ✅ ADDED: MyVacuumAgent option
+        Parameter p2 = new Parameter(PARAM_AGENT,
+                "MyVacuumAgent",                 // NEW
+                "TableDrivenVacuumAgent",
+                "ReflexVacuumAgent",
+                "SimpleReflexVacuumAgent",
+                "ModelBasedReflexVacuumAgent",
+                "NondeterministicVacuumAgent",
                 "RandomWalkVacuumAgent");
+
         return Arrays.asList(p1, p2);
     }
 
-    /**
-     * Is called after each parameter selection change.
-     */
     @Override
     public void initialize() {
+
+        // ✅ UPDATED: shifted indices because we added new option
         switch (taskPaneCtrl.getParamValueIndex(PARAM_ENV)) {
             case 0:
-                env = new MyVacuumEnvironment();
+                env = new RowVacuumEnvironment(8);  // YOUR ENVIRONMENT
                 break;
             case 1:
-                env = new NondeterministicVacuumEnvironment();
+                env = new VacuumEnvironment();
                 break;
             case 2:
-                env = new MazeVacuumEnvironment(5, 5, 0.5, 0.2);
+                env = new NondeterministicVacuumEnvironment();
                 break;
             case 3:
+                env = new MazeVacuumEnvironment(5, 5, 0.5, 0.2);
+                break;
+            case 4:
                 env = new MazeVacuumEnvironment(10, 10, 0.8, 0.3);
                 break;
         }
+
         switch (taskPaneCtrl.getParamValueIndex(PARAM_AGENT)) {
+
             case 0:
-                agent = new TableDrivenVacuumAgent();
+                agent = new MyVacuumAgent();   // ✅ YOUR AGENT
                 break;
             case 1:
-                agent = new ReflexVacuumAgent();
+                agent = new TableDrivenVacuumAgent();
                 break;
             case 2:
-                agent = new SimpleReflexVacuumAgent();
+                agent = new ReflexVacuumAgent();
                 break;
             case 3:
-                agent = new MyFinalAgent();
+                agent = new SimpleReflexVacuumAgent();
                 break;
             case 4:
-                agent = new NondeterministicSearchAgent<>(VacuumWorldFunctions::getState, env);
+                agent = new ModelBasedReflexVacuumAgent();
                 break;
             case 5:
+                agent = new NondeterministicSearchAgent<>(VacuumWorldFunctions::getState, env);
+                break;
+            case 6:
                 agent = new RandomWalkVacuumAgent();
                 break;
         }
+
         if (env != null && agent != null) {
             envViewCtrl.initialize(env);
             env.addEnvironmentListener(envViewCtrl);
@@ -130,23 +142,26 @@ public class VacuumAgentApp extends IntegrableApplication {
         }
     }
 
-    /**
-     * Starts the experiment.
-     */
     public void startExperiment() {
+
         if (agent instanceof NondeterministicSearchAgent) {
             NondeterministicProblem<VacuumEnvironmentState, Action> problem =
                     new NondeterministicProblem<>(env.getCurrentState(),
-                            VacuumWorldFunctions::getActions, VacuumWorldFunctions.createResultsFunctionFor(agent),
-                            VacuumWorldFunctions::testGoal, (s, a, sPrimed) -> 1.0);
-            // Set the problem now for this kind of agent
-            ((NondeterministicSearchAgent<VacuumPercept, VacuumEnvironmentState, Action>) agent).makePlan(problem);
+                            VacuumWorldFunctions::getActions,
+                            VacuumWorldFunctions.createResultsFunctionFor(agent),
+                            VacuumWorldFunctions::testGoal,
+                            (s, a, sPrimed) -> 1.0);
+
+            ((NondeterministicSearchAgent<VacuumPercept, VacuumEnvironmentState, Action>) agent)
+                    .makePlan(problem);
         }
+
         while (!env.isDone() && !Tasks.currIsCancelled()) {
             env.step();
             taskPaneCtrl.setStatus("Performance=" + env.getPerformanceMeasure(agent));
             taskPaneCtrl.waitAfterStep();
         }
+
         envViewCtrl.notify("Performance=" + env.getPerformanceMeasure(agent));
     }
 

@@ -1,68 +1,60 @@
 package vacuum;
 
 import aima.core.agent.Agent;
-import aima.core.agent.impl.AbstractEnvironment;
+import aima.core.environment.vacuum.VacuumEnvironment;
+import aima.core.environment.vacuum.VacuumPercept;
 
-public class RowVacuumEnvironment extends AbstractEnvironment<vacuum.RowVacuumPercept, RowVacuumAction> {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
-    private boolean[] dirt;
-    private int position;
-    private int performance = 0;
+public class RowVacuumEnvironment extends VacuumEnvironment {
 
-    public RowVacuumEnvironment(boolean[] dirt, int startPos) {
-        this.dirt = dirt.clone();
-        this.position = startPos;
+    public RowVacuumEnvironment(int size) {
+        super(generateLocations(size), generateStates(size));
+    }
+
+    private static List<String> generateLocations(int size) {
+        List<String> locations = new ArrayList<>();
+
+        for (int i = 0; i < size; i++) {
+            locations.add(String.valueOf((char) ('A' + i)));
+        }
+
+        return locations;
+    }
+
+    private static LocationState[] generateStates(int size) {
+        LocationState[] states = new LocationState[size];
+        Random rand = new Random();
+
+        for (int i = 0; i < size; i++) {
+            states[i] = rand.nextBoolean()
+                    ? LocationState.Dirty
+                    : LocationState.Clean;
+        }
+
+        return states;
     }
 
     @Override
-    public RowVacuumPercept getPerceptSeenBy(Agent<?, ?> agent) {
-        return new vacuum.RowVacuumPercept(
-                dirt[position],
-                position > 0,
-                position < dirt.length - 1
+    public VacuumPercept getPerceptSeenBy(Agent<?, ?> agent) {
+
+        String loc = getAgentLocation(agent);
+        int x = getX(loc);
+
+        boolean canMoveLeft = x > 1;
+        boolean canMoveRight = x < getXDimension();
+
+        VacuumPercept percept = new VacuumPercept(
+                loc,
+                getLocationState(loc)
         );
-    }
 
-    @Override
-    public void execute(Agent<?, ?> agent, RowVacuumAction action) {
+        // Add extra information
+        percept.setAttribute("left", canMoveLeft);
+        percept.setAttribute("right", canMoveRight);
 
-        switch (action) {
-
-            case SUCK:
-                if (dirt[position]) {
-                    dirt[position] = false;
-                    performance += 10;
-                }
-                break;
-
-            case LEFT:
-                if (position > 0) {
-                    position--;
-                    performance -= 1;
-                }
-                break;
-
-            case RIGHT:
-                if (position < dirt.length - 1) {
-                    position++;
-                    performance -= 1;
-                }
-                break;
-
-            case NO_OP:
-                break;
-        }
-    }
-
-    @Override
-    public boolean isDone() {
-        for (boolean d : dirt) {
-            if (d) return false;
-        }
-        return true;
-    }
-
-    public int getPerformance() {
-        return performance;
+        return percept;
     }
 }

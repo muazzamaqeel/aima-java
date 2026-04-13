@@ -4,25 +4,24 @@ import aima.core.agent.Action;
 import aima.core.agent.Agent;
 import aima.core.environment.vacuum.VacuumPercept;
 
-public class RowVacuumDemo {
+public class Main {
 
     public static void main(String[] args) {
 
-        // Create environment with 8 squares
+        // ✅ CORRECT constructor call
         RowVacuumEnvironment env = new RowVacuumEnvironment(8);
 
-        // Use YOUR agent
+        // ❌ WRONG before: RowVacuumAgent
+        // ✅ CORRECT:
         Agent<VacuumPercept, Action> agent = new MyVacuumAgent();
 
         env.addAgent(agent);
 
-        // Run simulation
         env.step(100);
 
+        // ❌ WRONG before: getPerformance()
+        // ✅ CORRECT:
         System.out.println("Performance: " +
                 env.getPerformanceMeasure(agent));
-
-        System.out.println("Final State: " +
-                env.getCurrentState());
     }
 }
