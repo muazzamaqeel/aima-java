@@ -105,7 +105,13 @@ public class ExtendedRoutePlannerOsmApp extends IntegrableApplication {
         List<Position> positions = routeCalculator.calculateRoute(
                 map.getMarkers(), map, taskCombo.getSelectionModel().getSelectedIndex());
         mapPaneCtrl.getMap().createTrack("Route", positions);
-        statusLabel.setText(getTrackInfo(mapPaneCtrl.getMap().getTrack("Route")));
+
+        Track track = mapPaneCtrl.getMap().getTrack("Route");
+        if (taskCombo.getSelectionModel().getSelectedIndex() == 3) {
+            statusLabel.setText(getTimeTrackInfo(track));
+        } else {
+            statusLabel.setText(getTrackInfo(track));
+        }
     }
 
     /**
@@ -129,5 +135,38 @@ public class ExtendedRoutePlannerOsmApp extends IntegrableApplication {
             info += "; Direction " + f2.format(course);
         }
         return info;
+    }
+
+    protected String getTimeTrackInfo(Track track) {
+        List<MapNode> nodes = track.getNodes();
+        DecimalFormat f1 = new DecimalFormat("#0.00");
+        double hours = estimateTime(nodes);
+        String info = track.getName() + ": Estimated Time " + f1.format(hours)
+                + " h";
+        if (nodes.size() == 2) {
+            DecimalFormat f2 = new DecimalFormat("#000");
+            MapNode m1 = nodes.get(nodes.size() - 2);
+            MapNode m2 = nodes.get(nodes.size() - 1);
+            int course = new Position(m1).getCourseTo(m2);
+            info += "; Direction " + f2.format(course);
+        }
+        return info;
+    }
+
+    protected double estimateTime(List<MapNode> nodes) {
+        double time = 0.0;
+        for (int i = 0; i < nodes.size() - 1; i++) {
+            MapNode a = nodes.get(i);
+            MapNode b = nodes.get(i + 1);
+
+            double distance = Position.getDistKM(
+                    a.getLat(), a.getLon(),
+                    b.getLat(), b.getLon()
+            );
+
+            double speed = 50.0;
+            time += distance / speed;
+        }
+        return time;
     }
 }
