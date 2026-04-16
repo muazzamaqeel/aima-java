@@ -25,6 +25,11 @@ import java.util.List;
  */
 public class ExtendedRoutePlannerOsmApp extends IntegrableApplication {
 
+    /**
+     * Entry point of the application.
+     * Launches the JavaFX application.
+     * @param args command line arguments
+     */
     public static void main(String[] args) {
         launch(args);
     }
@@ -36,13 +41,20 @@ public class ExtendedRoutePlannerOsmApp extends IntegrableApplication {
 
     private ExtendedRouteCalculator routeCalculator;
 
+    /**
+     * Returns the title of the application window.
+     * Used by the framework for display.
+     * @return application title
+     */
     @Override
     public String getTitle() {
         return "OSM Route Planner App";
     }
 
     /**
-     * Simple pane to control the game.
+     * Creates and initializes the main UI layout.
+     * Sets up toolbar, map view, and status display.
+     * @return root pane of the application
      */
     @Override
     public Pane createRootPane() {
@@ -81,25 +93,37 @@ public class ExtendedRoutePlannerOsmApp extends IntegrableApplication {
     }
 
     /**
-     * Factory method for the routing component. Subclasses can override it and
-     * provide more advanced routing algorithms.
+     * Factory method for creating the route calculator.
+     * Can be overridden to provide custom routing algorithms.
+     * @return instance of ExtendedRouteCalculator
      */
     protected ExtendedRouteCalculator createRouteCalculator() {
         return new ExtendedRouteCalculator();
     }
 
+    /**
+     * Resets the application state.
+     * Clears all markers and tracks from the map.
+     */
     @Override
     public void initialize() {
         mapPaneCtrl.getMap().clearMarkersAndTracks();
         statusLabel.setText("");
     }
 
+    /**
+     * Performs cleanup when the application is closed.
+     * Currently no cleanup actions are required.
+     */
     @Override
     public void cleanup() {
         // nothing to do here...
     }
 
-    /** Starts route generation after the calculate button has been pressed. */
+    /**
+     * Calculates and displays the route between selected markers.
+     * Updates the map and status information.
+     */
     public void calculateRoute() {
         OsmMap map = mapPaneCtrl.getMap();
         List<Position> positions = routeCalculator.calculateRoute(
@@ -115,12 +139,19 @@ public class ExtendedRoutePlannerOsmApp extends IntegrableApplication {
     }
 
     /**
-     * Enables the Calculate button if at least two markers are set.
+     * Enables or disables the calculate button.
+     * Button is enabled only if at least two markers are set.
      */
     protected void updateEnabledState() {
         calcBtn.setDisable(mapPaneCtrl.getMap().getMarkers().size() < 2);
     }
 
+    /**
+     * Computes and returns information about the track length.
+     * Also includes direction if only two nodes are present.
+     * @param track the route track
+     * @return formatted track information string
+     */
     protected String getTrackInfo(Track track) {
         List<MapNode> nodes = track.getNodes();
         DecimalFormat f1 = new DecimalFormat("#0.00");
@@ -137,6 +168,12 @@ public class ExtendedRoutePlannerOsmApp extends IntegrableApplication {
         return info;
     }
 
+    /**
+     * Computes and returns estimated travel time for the track.
+     * Also includes direction if only two nodes are present.
+     * @param track the route track
+     * @return formatted time information string
+     */
     protected String getTimeTrackInfo(Track track) {
         List<MapNode> nodes = track.getNodes();
         DecimalFormat f1 = new DecimalFormat("#0.00");
@@ -153,6 +190,12 @@ public class ExtendedRoutePlannerOsmApp extends IntegrableApplication {
         return info;
     }
 
+    /**
+     * Estimates travel time based on distance between nodes.
+     * Uses a constant speed assumption.
+     * @param nodes list of map nodes forming the route
+     * @return estimated time in hours
+     */
     protected double estimateTime(List<MapNode> nodes) {
         double time = 0.0;
         for (int i = 0; i < nodes.size() - 1; i++) {
