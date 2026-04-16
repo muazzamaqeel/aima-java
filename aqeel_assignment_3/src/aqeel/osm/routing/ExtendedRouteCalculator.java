@@ -12,6 +12,7 @@ import aimax.osm.data.OsmMap;
 import aimax.osm.data.Position;
 import aimax.osm.data.entities.MapNode;
 import aimax.osm.routing.OsmMoveAction;
+import aimax.osm.routing.RouteCalculator;
 import aimax.osm.routing.RouteFindingProblem;
 
 import java.util.ArrayList;
@@ -25,8 +26,7 @@ import java.util.function.ToDoubleFunction;
  *
  * @author Ruediger Lunde
  */
-public class ExtendedRouteCalculator {
-
+public class ExtendedRouteCalculator extends RouteCalculator {
 	/** Returns the names of all supported way selection options. */
 	public String[] getTaskSelectionOptions() {
 		return new String[] {
@@ -118,7 +118,7 @@ public class ExtendedRouteCalculator {
 			}
 
 			if (taskSelection == 4) {
-				return distance * 0.5;
+				return distance;
 			}
 
 			return distance;
@@ -166,8 +166,9 @@ public class ExtendedRouteCalculator {
 	}
 
 	private double getDistance(MapNode a, MapNode b) {
-		double dx = a.getLat() - b.getLat();
-		double dy = a.getLon() - b.getLon();
-		return Math.sqrt(dx * dx + dy * dy);
+		return Position.getDistKM(
+				a.getLat(), a.getLon(),
+				b.getLat(), b.getLon()
+		);
 	}
 }
