@@ -117,7 +117,6 @@ public class ExtendedRoutePlannerOsmApp extends IntegrableApplication {
      */
     @Override
     public void cleanup() {
-        // nothing to do here...
     }
 
     /**

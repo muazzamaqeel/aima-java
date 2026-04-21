@@ -125,6 +125,11 @@ public class ExtendedRouteCalculator extends RouteCalculator {
 		};
 	}
 
+	/**
+	 *
+	 * Objective: A*
+	 * @return
+	 */
 	protected SearchForActions<MapNode, OsmMoveAction> createSearch
 			(ToDoubleFunction<Node<MapNode, OsmMoveAction>> h, int taskSelection) {
 		return new AStarSearch<>(new GraphSearch<>(), h);
@@ -134,12 +139,13 @@ public class ExtendedRouteCalculator extends RouteCalculator {
 
 		double distance = getDistance(from, to);
 
+		// Distance case
 		if (taskSelection <= 2) {
 			return distance;
 		}
 
 		String type = action.getWay().getAttributeValue("highway");
-
+		//Time (Car)
 		if (taskSelection == 3) {
 
 			double speed;
@@ -152,7 +158,7 @@ public class ExtendedRouteCalculator extends RouteCalculator {
 
 			return distance / speed;
 		}
-
+		//Fun (Cyclist)
 		if (taskSelection == 4) {
 
 			if ("cycleway".equals(type)) return distance * 0.5;
