@@ -108,7 +108,7 @@ public class ExtendedOnlineAgentOsmApp extends IntegrableApplication {
             agent = new LRTAStarAgent<>(osp, MapFunctions.createPerceptToStateFunction(), heuristic);
         }
         else {
-            agent = new MyAgent(osp);
+            agent = new MyAgent(osp, locations.get(1), map);
         }
 
         return agent;
