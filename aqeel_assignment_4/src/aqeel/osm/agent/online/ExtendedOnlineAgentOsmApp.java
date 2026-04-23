@@ -74,7 +74,7 @@ public class ExtendedOnlineAgentOsmApp extends IntegrableApplication {
 
     protected List<Parameter> createParameters() {
         Parameter p1 = new Parameter(PARAM_WAY_SELECTION, "Use any way", "Travel by car", "Travel by bicycle");
-        Parameter p2 = new Parameter(PARAM_STRATEGY, "Online DFS agent", "LRTA* agent");
+        Parameter p2 = new Parameter(PARAM_STRATEGY, "Online DFS agent", "LRTA* agent", "My Agent");
         p2.setDefaultValueIndex(1);
         Parameter p3 = new Parameter(PARAM_HEURISTIC, "0", "SLD");
         p3.setDefaultValueIndex(1);
@@ -98,13 +98,21 @@ public class ExtendedOnlineAgentOsmApp extends IntegrableApplication {
             heuristic = state -> MapFunctions.getSLD(state, locations.get(1), map);
 
         Agent<DynamicPercept, MoveToAction> agent;
-        if (simPaneCtrl.getParamValueIndex(PARAM_STRATEGY) == 0)
+
+        int strategy = simPaneCtrl.getParamValueIndex(PARAM_STRATEGY);
+
+        if (strategy == 0) {
             agent = new OnlineDFSAgent<>(osp, MapFunctions.createPerceptToStateFunction());
-        else
+        }
+        else if (strategy == 1) {
             agent = new LRTAStarAgent<>(osp, MapFunctions.createPerceptToStateFunction(), heuristic);
+        }
+        else {
+            agent = new MyAgent(osp);
+        }
+
         return agent;
     }
-
     /**
      * Defines state view, parameters, and call-back functions and calls the
      * simulation pane builder to create layout and controller objects.
