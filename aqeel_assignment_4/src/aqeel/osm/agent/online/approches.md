@@ -1,5 +1,6 @@
 # Exercise 4.1:
 
+
 ## (a) Best-first search
 Best-first search is a search strategy that always expands the most promising node first, based on an evaluation function that estimates how good each node is.
 
@@ -15,10 +16,19 @@ A consistent heuristic is a heuristic where the estimated cost from a state is a
 
 # Exercise 4.2:
 
+## Consistent heuristic
+![img.png](img.png)
+
+## Admissable
+![img_1.png](img_1.png)
+
+
 ## Prove or disprove:
 ## (a) Every admissible heuristic is consistent.
+![img_2.png](img_2.png)
 False, admissibility only means never overestimating the true cost, while consistency is a stronger edge-by-edge condition.
 ## (b) Every consistent heuristic is admissible.
+![img_3.png](img_3.png)
 True, every consistent heuristic is admissible because consistency implies the estimate cannot overestimate the true remaining cost
 ## (c) Breadth-first search, depth-first search, and uniform-cost search are special cases of best-first search.
 True, BFS, DFS, and uniform-cost search are special cases of best-first search with different evaluation rules for which node is expanded next.
@@ -32,7 +42,7 @@ and let finally hmax be defined by hmax(n) =  max(h1(n), h2(n)).
 Prove or disprove:
 
 (a) h+ is admissible and dominates h1, h2.
-
+![img_4.png](img_4.png)
 False — (h^+) is not admissible in general because adding two admissible heuristics can overestimate the true cost, even though it dominates (h_1) and (h_2).
 
 (b) hmax  is admissible and dominates h1, h2.

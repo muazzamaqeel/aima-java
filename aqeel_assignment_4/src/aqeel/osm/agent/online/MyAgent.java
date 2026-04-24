@@ -84,7 +84,7 @@ public class MyAgent extends SimpleAgent<DynamicPercept, MoveToAction> {
                 bestAction = action;
             }
         }
-        // LEARNING STEP (key improvement)
+        // LEARNING STEP
         // increase penalty slowly → smoother learning
         penalty.put(current, penalty.getOrDefault(current, 0.0) + 2.0);
         previousState = current;
