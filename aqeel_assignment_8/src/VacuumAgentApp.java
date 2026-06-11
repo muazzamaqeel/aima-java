@@ -2,7 +2,6 @@ import aima.core.agent.Action;
 import aima.core.agent.impl.SimpleAgent;
 import aima.core.environment.vacuum.*;
 import aima.core.environment.vacuum.algorithms.MazeSearchAlgorithm;
-import aima.core.environment.vacuum.SmartMazeVacuumAgent;
 import aima.core.search.agent.NondeterministicSearchAgent;
 import aima.core.search.nondeterministic.NondeterministicProblem;
 import aima.core.util.Tasks;
@@ -11,7 +10,6 @@ import aima.gui.fx.framework.Parameter;
 import aima.gui.fx.framework.TaskExecutionPaneBuilder;
 import aima.gui.fx.framework.TaskExecutionPaneCtrl;
 import aima.gui.fx.views.SimpleEnvironmentViewCtrl;
-import aima.gui.fx.views.VacuumEnvironmentViewCtrl;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
@@ -39,7 +37,10 @@ public class VacuumAgentApp extends IntegrableApplication {
 
     public final static String PARAM_ENV = "environment";
     public final static String PARAM_AGENT = "agent";
-    public final static String PARAM_ALGORITHM = "algorithm";
+    public final static String PARAM_AGENT_COUNT = "agents";
+    public final static String PARAM_ALGORITHM_AGENT_1 = "algorithm agent 1";
+    public final static String PARAM_ALGORITHM_AGENT_2 = "algorithm agent 2";
+    public final static String PARAM_ALGORITHM_AGENT_3 = "algorithm agent 3";
 
     private static final String ALGORITHM_PACKAGE = "aima.core.environment.vacuum.algorithms";
 
@@ -47,6 +48,8 @@ public class VacuumAgentApp extends IntegrableApplication {
     protected SimpleEnvironmentViewCtrl<VacuumPercept, Action> envViewCtrl;
     protected VacuumEnvironment env = null;
     protected SimpleAgent<VacuumPercept, Action> agent = null;
+
+    private final List<SimpleAgent<VacuumPercept, Action>> agents = new ArrayList<>();
 
     @Override
     public String getTitle() {
@@ -62,7 +65,7 @@ public class VacuumAgentApp extends IntegrableApplication {
         BorderPane root = new BorderPane();
 
         StackPane envView = new StackPane();
-        envViewCtrl = new VacuumEnvironmentViewCtrl(envView, action -> {
+        envViewCtrl = new VacuumEnvironmentViewCtrl_Extended(envView, action -> {
             if (action == VacuumEnvironment.ACTION_MOVE_LEFT) return 270.0;
             else if (action == VacuumEnvironment.ACTION_MOVE_RIGHT) return 90.0;
             else if (action == MazeVacuumEnvironment.ACTION_MOVE_UP) return 0.0;
@@ -98,12 +101,23 @@ public class VacuumAgentApp extends IntegrableApplication {
                 "RandomWalkVacuumAgent",
                 "SmartMazeVacuumAgent");
 
+        Parameter p3 = new Parameter(PARAM_AGENT_COUNT,
+                "1",
+                "2",
+                "3");
+
         List<String> algorithms = loadAlgorithmNames();
 
-        Parameter p3 = new Parameter(PARAM_ALGORITHM,
+        Parameter p4 = new Parameter(PARAM_ALGORITHM_AGENT_1,
                 algorithms.toArray(new String[0]));
 
-        return Arrays.asList(p1, p2, p3);
+        Parameter p5 = new Parameter(PARAM_ALGORITHM_AGENT_2,
+                algorithms.toArray(new String[0]));
+
+        Parameter p6 = new Parameter(PARAM_ALGORITHM_AGENT_3,
+                algorithms.toArray(new String[0]));
+
+        return Arrays.asList(p1, p2, p3, p4, p5, p6);
     }
 
     private List<String> loadAlgorithmNames() {
@@ -175,55 +189,115 @@ public class VacuumAgentApp extends IntegrableApplication {
                 env = new MazeVacuumEnvironment(10, 10, 0.8, 0.3);
                 break;
         }
-        switch (taskPaneCtrl.getParamValueIndex(PARAM_AGENT)) {
-            case 0:
-                agent = new TableDrivenVacuumAgent();
-                break;
-            case 1:
-                agent = new ReflexVacuumAgent();
-                break;
-            case 2:
-                agent = new SimpleReflexVacuumAgent();
-                break;
-            case 3:
-                agent = new ModelBasedReflexVacuumAgent();
-                break;
-            case 4:
-                agent = new NondeterministicSearchAgent<>(VacuumWorldFunctions::getState, env);
-                break;
-            case 5:
-                agent = new RandomWalkVacuumAgent();
-                break;
-            case 6:
-                String selectedAlgorithm = taskPaneCtrl.getParamValue(PARAM_ALGORITHM).toString();
-                agent = new SmartMazeVacuumAgent(selectedAlgorithm);
-                break;
+
+        agents.clear();
+
+        int numberOfAgents = Integer.parseInt(taskPaneCtrl.getParamValue(PARAM_AGENT_COUNT).toString());
+
+        String algorithmAgent1 = taskPaneCtrl.getParamValue(PARAM_ALGORITHM_AGENT_1).toString();
+        String algorithmAgent2 = taskPaneCtrl.getParamValue(PARAM_ALGORITHM_AGENT_2).toString();
+        String algorithmAgent3 = taskPaneCtrl.getParamValue(PARAM_ALGORITHM_AGENT_3).toString();
+
+        if (numberOfAgents >= 1) {
+            agents.add(createSelectedAgent(algorithmAgent1));
         }
-        if (env != null && agent != null) {
+
+        if (numberOfAgents >= 2) {
+            agents.add(createSelectedAgent(algorithmAgent2));
+        }
+
+        if (numberOfAgents >= 3) {
+            agents.add(createSelectedAgent(algorithmAgent3));
+        }
+
+        if (!agents.isEmpty()) {
+            agent = agents.get(0);
+        }
+
+        if (env != null && !agents.isEmpty()) {
             envViewCtrl.initialize(env);
             env.addEnvironmentListener(envViewCtrl);
-            env.addAgent(agent);
+
+            String startLocation = getSharedStartLocation();
+
+            for (SimpleAgent<VacuumPercept, Action> currentAgent : agents) {
+                env.addAgent(currentAgent, startLocation);
+            }
         }
+    }
+
+    private SimpleAgent<VacuumPercept, Action> createSelectedAgent(String selectedAlgorithm) {
+        switch (taskPaneCtrl.getParamValueIndex(PARAM_AGENT)) {
+            case 0:
+                return new TableDrivenVacuumAgent();
+            case 1:
+                return new ReflexVacuumAgent();
+            case 2:
+                return new SimpleReflexVacuumAgent();
+            case 3:
+                return new ModelBasedReflexVacuumAgent();
+            case 4:
+                return new NondeterministicSearchAgent<>(VacuumWorldFunctions::getState, env);
+            case 5:
+                return new RandomWalkVacuumAgent();
+            case 6:
+                return new SmartMazeVacuumAgent(selectedAlgorithm);
+        }
+
+        return new SmartMazeVacuumAgent(selectedAlgorithm);
+    }
+
+    private String getSharedStartLocation() {
+        for (String location : env.getLocations()) {
+            if (env.getLocationState(location) != null) {
+                return location;
+            }
+        }
+
+        return env.getLocations().get(0);
     }
 
     /**
      * Starts the experiment.
      */
     public void startExperiment() {
-        if (agent instanceof NondeterministicSearchAgent) {
-            NondeterministicProblem<VacuumEnvironmentState, Action> problem =
-                    new NondeterministicProblem<>(env.getCurrentState(),
-                            VacuumWorldFunctions::getActions, VacuumWorldFunctions.createResultsFunctionFor(agent),
-                            VacuumWorldFunctions::testGoal, (s, a, sPrimed) -> 1.0);
-            // Set the problem now for this kind of agent
-            ((NondeterministicSearchAgent<VacuumPercept, VacuumEnvironmentState, Action>) agent).makePlan(problem);
+        for (SimpleAgent<VacuumPercept, Action> currentAgent : agents) {
+            if (currentAgent instanceof NondeterministicSearchAgent) {
+                NondeterministicProblem<VacuumEnvironmentState, Action> problem =
+                        new NondeterministicProblem<>(env.getCurrentState(),
+                                VacuumWorldFunctions::getActions,
+                                VacuumWorldFunctions.createResultsFunctionFor(currentAgent),
+                                VacuumWorldFunctions::testGoal,
+                                (s, a, sPrimed) -> 1.0);
+                // Set the problem now for this kind of agent
+                ((NondeterministicSearchAgent<VacuumPercept, VacuumEnvironmentState, Action>) currentAgent).makePlan(problem);
+            }
         }
+
         while (!env.isDone() && !Tasks.currIsCancelled()) {
             env.step();
-            taskPaneCtrl.setStatus("Performance=" + env.getPerformanceMeasure(agent));
+            taskPaneCtrl.setStatus(createPerformanceText());
             taskPaneCtrl.waitAfterStep();
         }
-        envViewCtrl.notify("Performance=" + env.getPerformanceMeasure(agent));
+
+        envViewCtrl.notify(createPerformanceText());
+    }
+
+    private String createPerformanceText() {
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < agents.size(); i++) {
+            if (i > 0) {
+                result.append(" | ");
+            }
+
+            result.append("Agent ")
+                    .append(i + 1)
+                    .append(" Performance=")
+                    .append(env.getPerformanceMeasure(agents.get(i)));
+        }
+
+        return result.toString();
     }
 
     @Override
