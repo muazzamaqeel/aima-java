@@ -1,3 +1,16 @@
+/*
+
+1. Read the current percept.
+2. Learn which neighboring squares exist.
+3. Build a small internal graph of discovered nodes.
+4. Remember visited/discovered nodes.
+5. Plan a path to the next target node.
+6. Return the next movement action.
+
+ */
+
+
+
 package aima.core.environment.vacuum.algorithms;
 
 import aima.core.agent.Action;
