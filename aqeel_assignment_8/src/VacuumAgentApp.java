@@ -1,6 +1,8 @@
 import aima.core.agent.Action;
 import aima.core.agent.impl.SimpleAgent;
 import aima.core.environment.vacuum.*;
+import aima.core.environment.vacuum.algorithms.MazeSearchAlgorithm;
+import aima.core.environment.vacuum.SmartMazeVacuumAgent;
 import aima.core.search.agent.NondeterministicSearchAgent;
 import aima.core.search.nondeterministic.NondeterministicProblem;
 import aima.core.util.Tasks;
@@ -14,7 +16,11 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 
+import java.io.File;
+import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 // VM options (Java>8): --module-path ${PATH_TO_FX} --add-modules javafx.controls,javafx.fxml
@@ -33,6 +39,9 @@ public class VacuumAgentApp extends IntegrableApplication {
 
     public final static String PARAM_ENV = "environment";
     public final static String PARAM_AGENT = "agent";
+    public final static String PARAM_ALGORITHM = "algorithm";
+
+    private static final String ALGORITHM_PACKAGE = "aima.core.environment.vacuum.algorithms";
 
     protected TaskExecutionPaneCtrl taskPaneCtrl;
     protected SimpleEnvironmentViewCtrl<VacuumPercept, Action> envViewCtrl;
@@ -53,13 +62,13 @@ public class VacuumAgentApp extends IntegrableApplication {
         BorderPane root = new BorderPane();
 
         StackPane envView = new StackPane();
-		envViewCtrl = new VacuumEnvironmentViewCtrl(envView, action -> {
-			if (action == VacuumEnvironment.ACTION_MOVE_LEFT) return 270.0;
-			else if (action == VacuumEnvironment.ACTION_MOVE_RIGHT) return 90.0;
-			else if (action == MazeVacuumEnvironment.ACTION_MOVE_UP) return 0.0;
-			else if (action == MazeVacuumEnvironment.ACTION_MOVE_DOWN) return 180.0;
-			else return null;
-		});
+        envViewCtrl = new VacuumEnvironmentViewCtrl(envView, action -> {
+            if (action == VacuumEnvironment.ACTION_MOVE_LEFT) return 270.0;
+            else if (action == VacuumEnvironment.ACTION_MOVE_RIGHT) return 90.0;
+            else if (action == MazeVacuumEnvironment.ACTION_MOVE_UP) return 0.0;
+            else if (action == MazeVacuumEnvironment.ACTION_MOVE_DOWN) return 180.0;
+            else return null;
+        });
 
         List<Parameter> params = createParameters();
 
@@ -74,12 +83,77 @@ public class VacuumAgentApp extends IntegrableApplication {
     }
 
     protected List<Parameter> createParameters() {
-        Parameter p1 = new Parameter(PARAM_ENV, "A/B Deterministic Environment",
-                "A/B Non-Deterministic Environment", "Small Maze Environment", "Maze Environment");
-        Parameter p2 = new Parameter(PARAM_AGENT, "TableDrivenVacuumAgent", "ReflexVacuumAgent",
-                "SimpleReflexVacuumAgent", "ModelBasedReflexVacuumAgent", "NondeterministicVacuumAgent",
-                "RandomWalkVacuumAgent", "SmartMazeVacuumAgent");
-        return Arrays.asList(p1, p2);
+        Parameter p1 = new Parameter(PARAM_ENV,
+                "A/B Deterministic Environment",
+                "A/B Non-Deterministic Environment",
+                "Small Maze Environment",
+                "Maze Environment");
+
+        Parameter p2 = new Parameter(PARAM_AGENT,
+                "TableDrivenVacuumAgent",
+                "ReflexVacuumAgent",
+                "SimpleReflexVacuumAgent",
+                "ModelBasedReflexVacuumAgent",
+                "NondeterministicVacuumAgent",
+                "RandomWalkVacuumAgent",
+                "SmartMazeVacuumAgent");
+
+        List<String> algorithms = loadAlgorithmNames();
+
+        Parameter p3 = new Parameter(PARAM_ALGORITHM,
+                algorithms.toArray(new String[0]));
+
+        return Arrays.asList(p1, p2, p3);
+    }
+
+    private List<String> loadAlgorithmNames() {
+        List<String> algorithmNames = new ArrayList<>();
+
+        try {
+            String packagePath = ALGORITHM_PACKAGE.replace('.', '/');
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+            URL packageUrl = classLoader.getResource(packagePath);
+
+            if (packageUrl != null && "file".equals(packageUrl.getProtocol())) {
+                File packageDirectory = new File(packageUrl.toURI());
+                File[] files = packageDirectory.listFiles();
+
+                if (files != null) {
+                    for (File file : files) {
+                        String fileName = file.getName();
+
+                        if (fileName.endsWith(".class")) {
+                            String className = fileName.substring(0, fileName.length() - 6);
+
+                            if (!className.contains("$")
+                                    && !className.equals("SmartMazeVacuumAgent")
+                                    && !className.equals("MazeSearchAlgorithm")) {
+
+                                Class<?> clazz = Class.forName(ALGORITHM_PACKAGE + "." + className);
+
+                                if (MazeSearchAlgorithm.class.isAssignableFrom(clazz)) {
+                                    algorithmNames.add(className);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        Collections.sort(algorithmNames);
+
+        if (algorithmNames.isEmpty()) {
+            algorithmNames.add("Breadth_First_Search");
+            algorithmNames.add("Depth_First_Search");
+            algorithmNames.add("Depth_Limited_Search");
+            algorithmNames.add("Iterative_Deepening_Search");
+            algorithmNames.add("Uniform_Cost_Search");
+        }
+
+        return algorithmNames;
     }
 
     /**
@@ -121,7 +195,8 @@ public class VacuumAgentApp extends IntegrableApplication {
                 agent = new RandomWalkVacuumAgent();
                 break;
             case 6:
-                agent = new SmartMazeVacuumAgent();
+                String selectedAlgorithm = taskPaneCtrl.getParamValue(PARAM_ALGORITHM).toString();
+                agent = new SmartMazeVacuumAgent(selectedAlgorithm);
                 break;
         }
         if (env != null && agent != null) {

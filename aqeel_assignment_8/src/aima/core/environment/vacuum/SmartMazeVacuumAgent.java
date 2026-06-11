@@ -2,14 +2,19 @@ package aima.core.environment.vacuum;
 
 import aima.core.agent.Action;
 import aima.core.agent.impl.SimpleAgent;
+import aima.core.environment.vacuum.VacuumEnvironment.LocationState;
+import aima.core.environment.vacuum.VacuumPercept;
+import aima.core.environment.vacuum.algorithms.Depth_First_Search;
+import aima.core.environment.vacuum.algorithms.MazeSearchAlgorithm;
 
+import java.lang.reflect.Constructor;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Stack;
 
 import static aima.core.environment.vacuum.MazeVacuumEnvironment.*;
+
 /**
  * This vacuum agent tries to clean up a checkerboard-like world of squares. Percepts inform
  * the agent about the state of the current square and about possible next movement directions.
@@ -19,6 +24,9 @@ import static aima.core.environment.vacuum.MazeVacuumEnvironment.*;
  */
 public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
 
+    private final String algorithm;
+    private final MazeSearchAlgorithm searchAlgorithm;
+
     private Action lastMoveAction;
 
     private int x = 0;
@@ -26,6 +34,15 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
 
     private final Set<String> visited = new HashSet<>();
     private final Stack<Action> backtrackStack = new Stack<>();
+
+    public SmartMazeVacuumAgent() {
+        this("Depth_First_Search");
+    }
+
+    public SmartMazeVacuumAgent(String algorithm) {
+        this.algorithm = algorithm;
+        this.searchAlgorithm = createSearchAlgorithm(algorithm);
+    }
 
     @Override
     public Optional<Action> act(VacuumPercept percept) {
@@ -35,21 +52,9 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
         if (percept.getCurrState() == LocationState.Dirty) {
             action = ACTION_SUCK;
         } else {
-            if (Objects.equals(percept.getAttribute(ATT_CAN_MOVE_UP), true) && !wasVisited(x, y - 1)) {
-                action = ACTION_MOVE_UP;
-                backtrackStack.push(opposite(action));
-            } else if (Objects.equals(percept.getAttribute(ATT_CAN_MOVE_RIGHT), true) && !wasVisited(x + 1, y)) {
-                action = ACTION_MOVE_RIGHT;
-                backtrackStack.push(opposite(action));
-            } else if (Objects.equals(percept.getAttribute(ATT_CAN_MOVE_DOWN), true) && !wasVisited(x, y + 1)) {
-                action = ACTION_MOVE_DOWN;
-                backtrackStack.push(opposite(action));
-            } else if (Objects.equals(percept.getAttribute(ATT_CAN_MOVE_LEFT), true) && !wasVisited(x - 1, y)) {
-                action = ACTION_MOVE_LEFT;
-                backtrackStack.push(opposite(action));
-            } else if (!backtrackStack.isEmpty()) {
-                action = backtrackStack.pop();
-            } else {
+            action = searchAlgorithm.selectAction(percept, x, y, visited, backtrackStack);
+
+            if (action == null) {
                 return Optional.empty();
             }
 
@@ -64,12 +69,19 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
         return Optional.of(action);
     }
 
-    private String key(int x, int y) {
-        return x + "," + y;
+    private MazeSearchAlgorithm createSearchAlgorithm(String algorithm) {
+        try {
+            String className = "aima.core.environment.vacuum.algorithms." + algorithm;
+            Class<?> clazz = Class.forName(className);
+            Constructor<?> constructor = clazz.getDeclaredConstructor();
+            return (MazeSearchAlgorithm) constructor.newInstance();
+        } catch (Exception e) {
+            return new Depth_First_Search();
+        }
     }
 
-    private boolean wasVisited(int x, int y) {
-        return visited.contains(key(x, y));
+    private String key(int x, int y) {
+        return x + "," + y;
     }
 
     private void updatePosition(Action action) {
@@ -82,18 +94,5 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
         } else if (action == ACTION_MOVE_RIGHT) {
             x++;
         }
-    }
-
-    private Action opposite(Action action) {
-        if (action == ACTION_MOVE_UP) {
-            return ACTION_MOVE_DOWN;
-        } else if (action == ACTION_MOVE_DOWN) {
-            return ACTION_MOVE_UP;
-        } else if (action == ACTION_MOVE_LEFT) {
-            return ACTION_MOVE_RIGHT;
-        } else if (action == ACTION_MOVE_RIGHT) {
-            return ACTION_MOVE_LEFT;
-        }
-        return null;
     }
 }
