@@ -1,64 +1,36 @@
 package aima.core.environment.vacuum.algorithms;
 
 import aima.core.agent.Action;
-import aima.core.environment.vacuum.VacuumPercept;
 
-import java.util.Objects;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Set;
-import java.util.Stack;
 
-import static aima.core.environment.vacuum.MazeVacuumEnvironment.*;
+public class Depth_First_Search extends OnlineMazeSearchBase {
 
-public class Depth_First_Search implements MazeSearchAlgorithm {
+    private final Deque<String> frontierStack = new ArrayDeque<>();
 
     @Override
-    public Action selectAction(VacuumPercept percept,
-                               int x,
-                               int y,
-                               Set<String> visited,
-                               Stack<Action> backtrackStack) {
+    protected void onNodeDiscovered(String node,
+                                    String parent,
+                                    Action action,
+                                    int depth,
+                                    int cost) {
+        frontierStack.push(node);
+    }
 
-        Action action;
+    @Override
+    protected String selectTargetNode(String currentNode, Set<String> visited) {
+        while (!frontierStack.isEmpty()) {
+            String target = frontierStack.peek();
 
-        if (Objects.equals(percept.getAttribute(ATT_CAN_MOVE_UP), true) && !wasVisited(visited, x, y - 1)) {
-            action = ACTION_MOVE_UP;
-            backtrackStack.push(opposite(action));
-        } else if (Objects.equals(percept.getAttribute(ATT_CAN_MOVE_RIGHT), true) && !wasVisited(visited, x + 1, y)) {
-            action = ACTION_MOVE_RIGHT;
-            backtrackStack.push(opposite(action));
-        } else if (Objects.equals(percept.getAttribute(ATT_CAN_MOVE_DOWN), true) && !wasVisited(visited, x, y + 1)) {
-            action = ACTION_MOVE_DOWN;
-            backtrackStack.push(opposite(action));
-        } else if (Objects.equals(percept.getAttribute(ATT_CAN_MOVE_LEFT), true) && !wasVisited(visited, x - 1, y)) {
-            action = ACTION_MOVE_LEFT;
-            backtrackStack.push(opposite(action));
-        } else if (!backtrackStack.isEmpty()) {
-            action = backtrackStack.pop();
-        } else {
-            return null;
+            if (isValidTarget(target, currentNode, visited)) {
+                return target;
+            }
+
+            frontierStack.pop();
         }
 
-        return action;
-    }
-
-    private boolean wasVisited(Set<String> visited, int x, int y) {
-        return visited.contains(key(x, y));
-    }
-
-    private String key(int x, int y) {
-        return x + "," + y;
-    }
-
-    private Action opposite(Action action) {
-        if (action == ACTION_MOVE_UP) {
-            return ACTION_MOVE_DOWN;
-        } else if (action == ACTION_MOVE_DOWN) {
-            return ACTION_MOVE_UP;
-        } else if (action == ACTION_MOVE_LEFT) {
-            return ACTION_MOVE_RIGHT;
-        } else if (action == ACTION_MOVE_RIGHT) {
-            return ACTION_MOVE_LEFT;
-        }
         return null;
     }
 }

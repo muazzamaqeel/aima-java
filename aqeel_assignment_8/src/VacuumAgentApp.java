@@ -50,6 +50,11 @@ public class VacuumAgentApp extends IntegrableApplication {
     protected SimpleAgent<VacuumPercept, Action> agent = null;
 
     private final List<SimpleAgent<VacuumPercept, Action>> agents = new ArrayList<>();
+    private final List<String> selectedAlgorithms = new ArrayList<>();
+    private final List<Long> agentFinishedTimesMs = new ArrayList<>();
+    private final List<String> agentResultStatuses = new ArrayList<>();
+
+    private VacuumPerformanceMetrics performanceMetrics;
 
     @Override
     public String getTitle() {
@@ -191,6 +196,9 @@ public class VacuumAgentApp extends IntegrableApplication {
         }
 
         agents.clear();
+        selectedAlgorithms.clear();
+        agentFinishedTimesMs.clear();
+        agentResultStatuses.clear();
 
         int numberOfAgents = Integer.parseInt(taskPaneCtrl.getParamValue(PARAM_AGENT_COUNT).toString());
 
@@ -198,16 +206,36 @@ public class VacuumAgentApp extends IntegrableApplication {
         String algorithmAgent2 = taskPaneCtrl.getParamValue(PARAM_ALGORITHM_AGENT_2).toString();
         String algorithmAgent3 = taskPaneCtrl.getParamValue(PARAM_ALGORITHM_AGENT_3).toString();
 
+        String startLocation = getSharedStartLocation();
+        int startX = env.getX(startLocation);
+        int startY = env.getY(startLocation);
+
+        VacuumLayeredDirtManager.initialize(env, numberOfAgents);
+
         if (numberOfAgents >= 1) {
-            agents.add(createSelectedAgent(algorithmAgent1));
+            SimpleAgent<VacuumPercept, Action> agent1 = createSelectedAgent(algorithmAgent1, 0, startX, startY);
+            agents.add(agent1);
+            selectedAlgorithms.add(algorithmAgent1);
+            VacuumLayeredDirtManager.registerAgent(agent1, 0);
         }
 
         if (numberOfAgents >= 2) {
-            agents.add(createSelectedAgent(algorithmAgent2));
+            SimpleAgent<VacuumPercept, Action> agent2 = createSelectedAgent(algorithmAgent2, 1, startX, startY);
+            agents.add(agent2);
+            selectedAlgorithms.add(algorithmAgent2);
+            VacuumLayeredDirtManager.registerAgent(agent2, 1);
         }
 
         if (numberOfAgents >= 3) {
-            agents.add(createSelectedAgent(algorithmAgent3));
+            SimpleAgent<VacuumPercept, Action> agent3 = createSelectedAgent(algorithmAgent3, 2, startX, startY);
+            agents.add(agent3);
+            selectedAlgorithms.add(algorithmAgent3);
+            VacuumLayeredDirtManager.registerAgent(agent3, 2);
+        }
+
+        for (int i = 0; i < agents.size(); i++) {
+            agentFinishedTimesMs.add(-1L);
+            agentResultStatuses.add("Running");
         }
 
         if (!agents.isEmpty()) {
@@ -218,15 +246,16 @@ public class VacuumAgentApp extends IntegrableApplication {
             envViewCtrl.initialize(env);
             env.addEnvironmentListener(envViewCtrl);
 
-            String startLocation = getSharedStartLocation();
-
             for (SimpleAgent<VacuumPercept, Action> currentAgent : agents) {
                 env.addAgent(currentAgent, startLocation);
             }
         }
     }
 
-    private SimpleAgent<VacuumPercept, Action> createSelectedAgent(String selectedAlgorithm) {
+    private SimpleAgent<VacuumPercept, Action> createSelectedAgent(String selectedAlgorithm,
+                                                                   int agentIndex,
+                                                                   int startX,
+                                                                   int startY) {
         switch (taskPaneCtrl.getParamValueIndex(PARAM_AGENT)) {
             case 0:
                 return new TableDrivenVacuumAgent();
@@ -241,10 +270,10 @@ public class VacuumAgentApp extends IntegrableApplication {
             case 5:
                 return new RandomWalkVacuumAgent();
             case 6:
-                return new SmartMazeVacuumAgent(selectedAlgorithm);
+                return new SmartMazeVacuumAgent(selectedAlgorithm, agentIndex, startX, startY);
         }
 
-        return new SmartMazeVacuumAgent(selectedAlgorithm);
+        return new SmartMazeVacuumAgent(selectedAlgorithm, agentIndex, startX, startY);
     }
 
     private String getSharedStartLocation() {
@@ -261,6 +290,11 @@ public class VacuumAgentApp extends IntegrableApplication {
      * Starts the experiment.
      */
     public void startExperiment() {
+        performanceMetrics = new VacuumPerformanceMetrics();
+        performanceMetrics.show(agents, selectedAlgorithms);
+
+        long startTimeNano = System.nanoTime();
+
         for (SimpleAgent<VacuumPercept, Action> currentAgent : agents) {
             if (currentAgent instanceof NondeterministicSearchAgent) {
                 NondeterministicProblem<VacuumEnvironmentState, Action> problem =
@@ -274,13 +308,118 @@ public class VacuumAgentApp extends IntegrableApplication {
             }
         }
 
-        while (!env.isDone() && !Tasks.currIsCancelled()) {
+        updateFinishedAgents(0);
+
+        while (!isExperimentDone() && !Tasks.currIsCancelled()) {
             env.step();
+
+            long elapsedTimeMs = (System.nanoTime() - startTimeNano) / 1_000_000;
+            updateFinishedAgents(elapsedTimeMs);
+
+            performanceMetrics.update(
+                    agents,
+                    env,
+                    createDisplayedTimes(elapsedTimeMs),
+                    new ArrayList<>(agentResultStatuses)
+            );
+
             taskPaneCtrl.setStatus(createPerformanceText());
             taskPaneCtrl.waitAfterStep();
         }
 
+        long totalTimeMs = (System.nanoTime() - startTimeNano) / 1_000_000;
+        updateFinishedAgents(totalTimeMs);
+
+        performanceMetrics.update(
+                agents,
+                env,
+                createDisplayedTimes(totalTimeMs),
+                new ArrayList<>(agentResultStatuses)
+        );
+
         envViewCtrl.notify(createPerformanceText());
+    }
+
+    private void updateFinishedAgents(long elapsedTimeMs) {
+        for (int i = 0; i < agents.size(); i++) {
+            SimpleAgent<VacuumPercept, Action> currentAgent = agents.get(i);
+
+            if (currentAgent instanceof SmartMazeVacuumAgent) {
+                SmartMazeVacuumAgent smartAgent = (SmartMazeVacuumAgent) currentAgent;
+
+                smartAgent.finishIfOwnDirtCleaned();
+
+                if (smartAgent.hasCompletedOwnDirt()) {
+                    setAgentFinished(i, elapsedTimeMs, "Finished");
+                } else if (smartAgent.hasNoMorePossibleMoves()) {
+                    setAgentFinished(i, elapsedTimeMs, "No more possible moves");
+                } else {
+                    if (i < agentResultStatuses.size()) {
+                        agentResultStatuses.set(i, "Running");
+                    }
+                }
+            }
+        }
+    }
+
+    private void setAgentFinished(int index, long elapsedTimeMs, String resultStatus) {
+        if (index < agentFinishedTimesMs.size() && agentFinishedTimesMs.get(index) < 0) {
+            agentFinishedTimesMs.set(index, elapsedTimeMs);
+        }
+
+        if (index < agentResultStatuses.size()) {
+            agentResultStatuses.set(index, resultStatus);
+        }
+    }
+
+    private List<Long> createDisplayedTimes(long elapsedTimeMs) {
+        List<Long> result = new ArrayList<>();
+
+        for (int i = 0; i < agents.size(); i++) {
+            long finishedTime = -1L;
+
+            if (i < agentFinishedTimesMs.size()) {
+                finishedTime = agentFinishedTimesMs.get(i);
+            }
+
+            if (finishedTime >= 0) {
+                result.add(finishedTime);
+            } else {
+                result.add(elapsedTimeMs);
+            }
+        }
+
+        return result;
+    }
+
+    private boolean isExperimentDone() {
+        if (VacuumLayeredDirtManager.isInitialized() && VacuumLayeredDirtManager.isAllClean()) {
+            return true;
+        }
+
+        boolean allSmartAgentsFinished = true;
+
+        for (SimpleAgent<VacuumPercept, Action> currentAgent : agents) {
+            if (currentAgent instanceof SmartMazeVacuumAgent) {
+                if (!((SmartMazeVacuumAgent) currentAgent).isFinished()) {
+                    allSmartAgentsFinished = false;
+                    break;
+                }
+            } else {
+                allSmartAgentsFinished = false;
+                break;
+            }
+        }
+
+        if (allSmartAgentsFinished) {
+            return true;
+        }
+
+        if (VacuumLayeredDirtManager.isInitialized()) {
+            return false;
+        }
+
+        return env.isDone();
     }
 
     private String createPerformanceText() {
@@ -293,8 +432,15 @@ public class VacuumAgentApp extends IntegrableApplication {
 
             result.append("Agent ")
                     .append(i + 1)
-                    .append(" Performance=")
-                    .append(env.getPerformanceMeasure(agents.get(i)));
+                    .append(" Performance=");
+
+            SimpleAgent<VacuumPercept, Action> currentAgent = agents.get(i);
+
+            if (currentAgent instanceof SmartMazeVacuumAgent) {
+                result.append(((SmartMazeVacuumAgent) currentAgent).getOriginalStylePerformance());
+            } else {
+                result.append(env.getPerformanceMeasure(currentAgent));
+            }
         }
 
         return result.toString();

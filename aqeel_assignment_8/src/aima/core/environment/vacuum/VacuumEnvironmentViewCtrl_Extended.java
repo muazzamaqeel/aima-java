@@ -6,12 +6,17 @@ import aima.core.agent.Environment;
 import aima.core.agent.impl.AbstractEnvironment;
 import aima.core.environment.vacuum.VacuumEnvironment.LocationState;
 import aima.gui.fx.views.VacuumEnvironmentViewCtrl;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Label;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Arc;
 import javafx.scene.shape.ArcType;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -62,6 +67,14 @@ public class VacuumEnvironmentViewCtrl_Extended extends VacuumEnvironmentViewCtr
                            Environment<?, ?> source) {
         if (action == VacuumEnvironment.ACTION_SUCK) {
             agentsInSuckState.add((Agent) agent);
+
+            if (source instanceof VacuumEnvironment && VacuumLayeredDirtManager.isInitialized()) {
+                VacuumEnvironment vEnv = (VacuumEnvironment) source;
+                String location = vEnv.getAgentLocation((Agent) agent);
+                int agentIndex = VacuumLayeredDirtManager.getAgentIndex((Agent) agent);
+
+                VacuumLayeredDirtManager.cleanDirtForAgent(agentIndex, location);
+            }
         } else {
             agentsInSuckState.remove(agent);
         }
@@ -80,22 +93,25 @@ public class VacuumEnvironmentViewCtrl_Extended extends VacuumEnvironmentViewCtr
         VacuumEnvironment vEnv = (VacuumEnvironment) env;
 
         for (String loc : vEnv.getLocations()) {
-            var btn = getSquareButton(vEnv.getX(loc), vEnv.getY(loc));
+            SquareButton btn = getSquareButton(vEnv.getX(loc), vEnv.getY(loc));
 
-            if (vEnv.getLocationState(loc) == LocationState.Dirty) {
+            btn.getLabel().setText("");
+            btn.getPane().getChildren().clear();
+
+            if (vEnv.getLocationState(loc) == null) {
+                btn.getLabel().setText("X");
+            } else if (VacuumLayeredDirtManager.isInitialized()) {
+                addLayeredDirtLabels(btn, loc);
+            } else if (vEnv.getLocationState(loc) == LocationState.Dirty) {
                 btn.getLabel().setText("Dirty");
             } else if (vEnv.getLocationState(loc) == LocationState.Clean) {
                 btn.getLabel().setText("");
-            } else {
-                btn.getLabel().setText("X");
             }
-
-            btn.getPane().getChildren().clear();
         }
 
         for (Agent agent : vEnv.getAgents()) {
             String loc = vEnv.getAgentLocation(agent);
-            var btn = getSquareButton(vEnv.getX(loc), vEnv.getY(loc));
+            SquareButton btn = getSquareButton(vEnv.getX(loc), vEnv.getY(loc));
 
             Double orientation = agentOrientations.get(agent);
 
@@ -104,6 +120,25 @@ public class VacuumEnvironmentViewCtrl_Extended extends VacuumEnvironmentViewCtr
             }
 
             btn.getPane().getChildren().add(getAgentSymbol(agent, orientation));
+        }
+    }
+
+    private void addLayeredDirtLabels(SquareButton btn, String location) {
+        ArrayList<Integer> remainingLayers = VacuumLayeredDirtManager.getRemainingDirtLayers(location);
+        Collections.sort(remainingLayers);
+
+        VBox dirtBox = new VBox(1);
+        dirtBox.setAlignment(Pos.CENTER);
+
+        for (Integer agentIndex : remainingLayers) {
+            Label dirtLabel = new Label("Dirty");
+            dirtLabel.setTextFill(getAgentColor(agentIndex));
+            dirtLabel.setStyle("-fx-font-size: 17px; -fx-font-weight: bold;");
+            dirtBox.getChildren().add(dirtLabel);
+        }
+
+        if (!dirtBox.getChildren().isEmpty()) {
+            btn.getPane().getChildren().add(dirtBox);
         }
     }
 
@@ -140,8 +175,10 @@ public class VacuumEnvironmentViewCtrl_Extended extends VacuumEnvironmentViewCtr
     }
 
     private Color getAgentColor(Agent agent) {
-        int index = getAgentIndex(agent);
+        return getAgentColor(getAgentIndex(agent));
+    }
 
+    private Color getAgentColor(int index) {
         if (index == 0) {
             return Color.RED;
         } else if (index == 1) {
@@ -152,6 +189,10 @@ public class VacuumEnvironmentViewCtrl_Extended extends VacuumEnvironmentViewCtr
     }
 
     private int getAgentIndex(Agent agent) {
+        if (VacuumLayeredDirtManager.isInitialized()) {
+            return VacuumLayeredDirtManager.getAgentIndex(agent);
+        }
+
         if (!agentIndexes.containsKey(agent)) {
             agentIndexes.put(agent, agentIndexes.size());
         }
