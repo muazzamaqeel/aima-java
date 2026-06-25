@@ -20,6 +20,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+
+import javafx.application.Platform;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 // VM options (Java>8): --module-path ${PATH_TO_FX} --add-modules javafx.controls,javafx.fxml
 
@@ -41,6 +47,7 @@ public class VacuumAgentApp extends IntegrableApplication {
     public final static String PARAM_ALGORITHM_AGENT_1 = "algorithm agent 1";
     public final static String PARAM_ALGORITHM_AGENT_2 = "algorithm agent 2";
     public final static String PARAM_ALGORITHM_AGENT_3 = "algorithm agent 3";
+    public final static String PARAM_RUN_COUNT = "runs";
 
     private static final String ALGORITHM_PACKAGE = "aima.core.environment.vacuum.algorithms";
 
@@ -122,7 +129,15 @@ public class VacuumAgentApp extends IntegrableApplication {
         Parameter p6 = new Parameter(PARAM_ALGORITHM_AGENT_3,
                 algorithms.toArray(new String[0]));
 
-        return Arrays.asList(p1, p2, p3, p4, p5, p6);
+        Parameter p7 = new Parameter(PARAM_RUN_COUNT,
+                "1",
+                "3",
+                "5",
+                "10",
+                "20",
+                "50");
+
+        return Arrays.asList(p1, p2, p3, p4, p5, p6, p7);
     }
 
     private List<String> loadAlgorithmNames() {
@@ -286,13 +301,116 @@ public class VacuumAgentApp extends IntegrableApplication {
         return env.getLocations().get(0);
     }
 
+    private void initializeForNextRunOnFxThread() {
+        if (Platform.isFxApplicationThread()) {
+            initialize();
+            return;
+        }
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<RuntimeException> exception = new AtomicReference<>();
+
+        Platform.runLater(() -> {
+            try {
+                initialize();
+            } catch (RuntimeException e) {
+                exception.set(e);
+            } finally {
+                latch.countDown();
+            }
+        });
+
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+
+        if (exception.get() != null) {
+            throw exception.get();
+        }
+    }
+
     /**
      * Starts the experiment.
      */
     public void startExperiment() {
-        performanceMetrics = new VacuumPerformanceMetrics();
-        performanceMetrics.show(agents, selectedAlgorithms);
+        int totalRunCount = getSelectedRunCount();
 
+        performanceMetrics = new VacuumPerformanceMetrics();
+
+        List<Double> totalPerformances = new ArrayList<>();
+        List<Long> totalTimesMs = new ArrayList<>();
+        List<Integer> totalMoves = new ArrayList<>();
+
+        int completedRuns = 0;
+
+        for (int runNumber = 1; runNumber <= totalRunCount && !Tasks.currIsCancelled(); runNumber++) {
+            initializeForNextRunOnFxThread();
+
+            if (runNumber == 1) {
+                initializeAverageLists(totalPerformances, totalTimesMs, totalMoves, agents.size());
+                performanceMetrics.show(agents, selectedAlgorithms, totalRunCount);
+            }
+
+            RunResult runResult = runSingleExperiment(runNumber, totalRunCount);
+
+            completedRuns++;
+            addRunResultToTotals(runResult, totalPerformances, totalTimesMs, totalMoves);
+
+            if (totalRunCount > 1) {
+                performanceMetrics.addRunResult(
+                        runNumber,
+                        runResult.performances,
+                        runResult.timesMs,
+                        runResult.moves
+                );
+            }
+
+            if (totalRunCount > 1) {
+                List<Double> averagePerformances = calculateAveragePerformances(totalPerformances, completedRuns);
+                List<Double> averageTimesMs = calculateAverageTimesMs(totalTimesMs, completedRuns);
+                List<Double> averageMoves = calculateAverageMoves(totalMoves, completedRuns);
+
+                performanceMetrics.updateAverages(
+                        completedRuns,
+                        totalRunCount,
+                        averagePerformances,
+                        averageTimesMs,
+                        averageMoves
+                );
+
+                taskPaneCtrl.setStatus(createAveragePerformanceText(
+                        completedRuns,
+                        totalRunCount,
+                        averagePerformances,
+                        averageTimesMs,
+                        averageMoves
+                ));
+            }
+        }
+
+        if (completedRuns > 0) {
+            if (totalRunCount > 1) {
+                List<Double> averagePerformances = calculateAveragePerformances(totalPerformances, completedRuns);
+                List<Double> averageTimesMs = calculateAverageTimesMs(totalTimesMs, completedRuns);
+                List<Double> averageMoves = calculateAverageMoves(totalMoves, completedRuns);
+
+                envViewCtrl.notify(createAveragePerformanceText(
+                        completedRuns,
+                        totalRunCount,
+                        averagePerformances,
+                        averageTimesMs,
+                        averageMoves
+                ));
+            } else {
+                envViewCtrl.notify(createPerformanceText());
+            }
+        }
+    }
+
+    private RunResult runSingleExperiment(int runNumber, int totalRunCount) {
         long startTimeNano = System.nanoTime();
 
         for (SimpleAgent<VacuumPercept, Action> currentAgent : agents) {
@@ -310,6 +428,15 @@ public class VacuumAgentApp extends IntegrableApplication {
 
         updateFinishedAgents(0);
 
+        performanceMetrics.update(
+                agents,
+                env,
+                createDisplayedTimes(0),
+                new ArrayList<>(agentResultStatuses)
+        );
+
+        taskPaneCtrl.setStatus(createRunStatusText(runNumber, totalRunCount));
+
         while (!isExperimentDone() && !Tasks.currIsCancelled()) {
             env.step();
 
@@ -323,21 +450,129 @@ public class VacuumAgentApp extends IntegrableApplication {
                     new ArrayList<>(agentResultStatuses)
             );
 
-            taskPaneCtrl.setStatus(createPerformanceText());
+            taskPaneCtrl.setStatus(createRunStatusText(runNumber, totalRunCount));
             taskPaneCtrl.waitAfterStep();
         }
 
         long totalTimeMs = (System.nanoTime() - startTimeNano) / 1_000_000;
         updateFinishedAgents(totalTimeMs);
 
+        List<Long> displayedTimesMs = createDisplayedTimes(totalTimeMs);
+
         performanceMetrics.update(
                 agents,
                 env,
-                createDisplayedTimes(totalTimeMs),
+                displayedTimesMs,
                 new ArrayList<>(agentResultStatuses)
         );
 
-        envViewCtrl.notify(createPerformanceText());
+        taskPaneCtrl.setStatus(createRunStatusText(runNumber, totalRunCount));
+
+        return createRunResult(displayedTimesMs);
+    }
+
+    private int getSelectedRunCount() {
+        try {
+            return Integer.parseInt(taskPaneCtrl.getParamValue(PARAM_RUN_COUNT).toString());
+        } catch (Exception e) {
+            return 1;
+        }
+    }
+
+    private void initializeAverageLists(List<Double> totalPerformances,
+                                        List<Long> totalTimesMs,
+                                        List<Integer> totalMoves,
+                                        int size) {
+        totalPerformances.clear();
+        totalTimesMs.clear();
+        totalMoves.clear();
+
+        for (int i = 0; i < size; i++) {
+            totalPerformances.add(0.0);
+            totalTimesMs.add(0L);
+            totalMoves.add(0);
+        }
+    }
+
+    private RunResult createRunResult(List<Long> displayedTimesMs) {
+        List<Double> performances = new ArrayList<>();
+        List<Long> timesMs = new ArrayList<>();
+        List<Integer> moves = new ArrayList<>();
+
+        for (int i = 0; i < agents.size(); i++) {
+            performances.add(getAgentPerformance(i));
+
+            if (i < displayedTimesMs.size()) {
+                timesMs.add(displayedTimesMs.get(i));
+            } else {
+                timesMs.add(0L);
+            }
+
+            moves.add(getAgentMoves(i));
+        }
+
+        return new RunResult(performances, timesMs, moves);
+    }
+
+    private double getAgentPerformance(int index) {
+        SimpleAgent<VacuumPercept, Action> currentAgent = agents.get(index);
+
+        if (currentAgent instanceof SmartMazeVacuumAgent) {
+            return ((SmartMazeVacuumAgent) currentAgent).getOriginalStylePerformance();
+        }
+
+        return env.getPerformanceMeasure(currentAgent);
+    }
+
+    private int getAgentMoves(int index) {
+        SimpleAgent<VacuumPercept, Action> currentAgent = agents.get(index);
+
+        if (currentAgent instanceof SmartMazeVacuumAgent) {
+            return ((SmartMazeVacuumAgent) currentAgent).getMoveCount();
+        }
+
+        return 0;
+    }
+
+    private void addRunResultToTotals(RunResult runResult,
+                                      List<Double> totalPerformances,
+                                      List<Long> totalTimesMs,
+                                      List<Integer> totalMoves) {
+        for (int i = 0; i < runResult.performances.size(); i++) {
+            totalPerformances.set(i, totalPerformances.get(i) + runResult.performances.get(i));
+            totalTimesMs.set(i, totalTimesMs.get(i) + runResult.timesMs.get(i));
+            totalMoves.set(i, totalMoves.get(i) + runResult.moves.get(i));
+        }
+    }
+
+    private List<Double> calculateAveragePerformances(List<Double> totalPerformances, int completedRuns) {
+        List<Double> result = new ArrayList<>();
+
+        for (Double totalPerformance : totalPerformances) {
+            result.add(totalPerformance / completedRuns);
+        }
+
+        return result;
+    }
+
+    private List<Double> calculateAverageTimesMs(List<Long> totalTimesMs, int completedRuns) {
+        List<Double> result = new ArrayList<>();
+
+        for (Long totalTimeMs : totalTimesMs) {
+            result.add(totalTimeMs / (double) completedRuns);
+        }
+
+        return result;
+    }
+
+    private List<Double> calculateAverageMoves(List<Integer> totalMoves, int completedRuns) {
+        List<Double> result = new ArrayList<>();
+
+        for (Integer totalMove : totalMoves) {
+            result.add(totalMove / (double) completedRuns);
+        }
+
+        return result;
     }
 
     private void updateFinishedAgents(long elapsedTimeMs) {
@@ -422,6 +657,14 @@ public class VacuumAgentApp extends IntegrableApplication {
         return env.isDone();
     }
 
+    private String createRunStatusText(int runNumber, int totalRunCount) {
+        if (totalRunCount > 1) {
+            return "Run " + runNumber + "/" + totalRunCount + " | " + createPerformanceText();
+        }
+
+        return createPerformanceText();
+    }
+
     private String createPerformanceText() {
         StringBuilder result = new StringBuilder();
 
@@ -446,8 +689,54 @@ public class VacuumAgentApp extends IntegrableApplication {
         return result.toString();
     }
 
+    private String createAveragePerformanceText(int completedRuns,
+                                                int totalRunCount,
+                                                List<Double> averagePerformances,
+                                                List<Double> averageTimesMs,
+                                                List<Double> averageMoves) {
+        StringBuilder result = new StringBuilder();
+
+        result.append("Average after ")
+                .append(completedRuns)
+                .append("/")
+                .append(totalRunCount)
+                .append(" runs: ");
+
+        for (int i = 0; i < averagePerformances.size(); i++) {
+            if (i > 0) {
+                result.append(" | ");
+            }
+
+            result.append("Agent ")
+                    .append(i + 1)
+                    .append(" Avg Performance=")
+                    .append(String.format(Locale.US, "%.2f", averagePerformances.get(i)))
+                    .append(", Avg Time=")
+                    .append(String.format(Locale.US, "%.2f", averageTimesMs.get(i)))
+                    .append(" ms")
+                    .append(", Avg Moves=")
+                    .append(String.format(Locale.US, "%.2f", averageMoves.get(i)));
+        }
+
+        return result.toString();
+    }
+
     @Override
     public void cleanup() {
         taskPaneCtrl.cancelExecution();
+    }
+
+    private static class RunResult {
+        private final List<Double> performances;
+        private final List<Long> timesMs;
+        private final List<Integer> moves;
+
+        private RunResult(List<Double> performances,
+                          List<Long> timesMs,
+                          List<Integer> moves) {
+            this.performances = performances;
+            this.timesMs = timesMs;
+            this.moves = moves;
+        }
     }
 }
