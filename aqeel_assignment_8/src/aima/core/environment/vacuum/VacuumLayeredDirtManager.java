@@ -19,9 +19,7 @@ public class VacuumLayeredDirtManager {
     private static boolean initialized = false;
 
     public static void initialize(VacuumEnvironment env, int numberOfAgents) {
-        remainingDirtLayers.clear();
-        agentIndexes.clear();
-        cleanedLayersByAgent.clear();
+        reset();
 
         agentCount = numberOfAgents;
         initialized = true;
@@ -41,6 +39,15 @@ public class VacuumLayeredDirtManager {
                 remainingDirtLayers.put(location, layers);
             }
         }
+    }
+
+    public static void reset() {
+        remainingDirtLayers.clear();
+        agentIndexes.clear();
+        cleanedLayersByAgent.clear();
+
+        agentCount = 1;
+        initialized = false;
     }
 
     public static boolean isInitialized() {

@@ -25,8 +25,16 @@ import java.util.function.Function;
 
 /**
  * Extended vacuum environment view controller.
- * This class only changes the displayed agent colors.
- * It does not modify the original AIMA view controller.
+ *
+ * This class is only responsible for visualization:
+ * - different agent colors
+ * - agent orientation
+ * - suck animation
+ * - layered dirt labels in hybrid mode
+ *
+ * Important:
+ * This class must not change the cleaning state.
+ * Cleaning logic belongs to the agent/model, not the view.
  */
 public class VacuumEnvironmentViewCtrl_Extended extends VacuumEnvironmentViewCtrl {
 
@@ -65,16 +73,9 @@ public class VacuumEnvironmentViewCtrl_Extended extends VacuumEnvironmentViewCtr
                            VacuumPercept percept,
                            Action action,
                            Environment<?, ?> source) {
+
         if (action == VacuumEnvironment.ACTION_SUCK) {
             agentsInSuckState.add((Agent) agent);
-
-            if (source instanceof VacuumEnvironment && VacuumLayeredDirtManager.isInitialized()) {
-                VacuumEnvironment vEnv = (VacuumEnvironment) source;
-                String location = vEnv.getAgentLocation((Agent) agent);
-                int agentIndex = VacuumLayeredDirtManager.getAgentIndex((Agent) agent);
-
-                VacuumLayeredDirtManager.cleanDirtForAgent(agentIndex, location);
-            }
         } else {
             agentsInSuckState.remove(agent);
         }
@@ -103,7 +104,7 @@ public class VacuumEnvironmentViewCtrl_Extended extends VacuumEnvironmentViewCtr
             } else if (VacuumLayeredDirtManager.isInitialized()) {
                 addLayeredDirtLabels(btn, loc);
             } else if (vEnv.getLocationState(loc) == LocationState.Dirty) {
-                btn.getLabel().setText("Dirty");
+                addNormalDirtLabel(btn);
             } else if (vEnv.getLocationState(loc) == LocationState.Clean) {
                 btn.getLabel().setText("");
             }
@@ -121,6 +122,14 @@ public class VacuumEnvironmentViewCtrl_Extended extends VacuumEnvironmentViewCtr
 
             btn.getPane().getChildren().add(getAgentSymbol(agent, orientation));
         }
+    }
+
+    private void addNormalDirtLabel(SquareButton btn) {
+        Label dirtLabel = new Label("Dirty");
+        dirtLabel.setTextFill(Color.DARKRED);
+        dirtLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold;");
+
+        btn.getPane().getChildren().add(dirtLabel);
     }
 
     private void addLayeredDirtLabels(SquareButton btn, String location) {

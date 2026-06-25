@@ -10,6 +10,7 @@ import aima.gui.fx.framework.Parameter;
 import aima.gui.fx.framework.TaskExecutionPaneBuilder;
 import aima.gui.fx.framework.TaskExecutionPaneCtrl;
 import aima.gui.fx.views.SimpleEnvironmentViewCtrl;
+import javafx.application.Platform;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
@@ -21,9 +22,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-
-import javafx.application.Platform;
-
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -31,9 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Integrable application which demonstrates how different kinds of vacuum
- * cleaner agents behave in a two square environment.
- *
- * @author Ruediger Lunde
+ * cleaner agents behave in different vacuum environments.
  */
 public class VacuumAgentApp extends IntegrableApplication {
 
@@ -44,6 +40,7 @@ public class VacuumAgentApp extends IntegrableApplication {
     public final static String PARAM_ENV = "environment";
     public final static String PARAM_AGENT = "agent";
     public final static String PARAM_AGENT_COUNT = "agents";
+    public final static String PARAM_AGENT_MODE = "agent mode";
     public final static String PARAM_ALGORITHM_AGENT_1 = "algorithm agent 1";
     public final static String PARAM_ALGORITHM_AGENT_2 = "algorithm agent 2";
     public final static String PARAM_ALGORITHM_AGENT_3 = "algorithm agent 3";
@@ -68,10 +65,6 @@ public class VacuumAgentApp extends IntegrableApplication {
         return "Vacuum Agent App";
     }
 
-    /**
-     * Defines state view, parameters, and call-back functions and calls the
-     * simulation pane builder to create layout and controller objects.
-     */
     @Override
     public Pane createRootPane() {
         BorderPane root = new BorderPane();
@@ -118,18 +111,22 @@ public class VacuumAgentApp extends IntegrableApplication {
                 "2",
                 "3");
 
+        Parameter p4 = new Parameter(PARAM_AGENT_MODE,
+                VacuumAgentMode.HYBRID_LAYERED.name(),
+                VacuumAgentMode.FULL_ONLINE.name());
+
         List<String> algorithms = loadAlgorithmNames();
 
-        Parameter p4 = new Parameter(PARAM_ALGORITHM_AGENT_1,
+        Parameter p5 = new Parameter(PARAM_ALGORITHM_AGENT_1,
                 algorithms.toArray(new String[0]));
 
-        Parameter p5 = new Parameter(PARAM_ALGORITHM_AGENT_2,
+        Parameter p6 = new Parameter(PARAM_ALGORITHM_AGENT_2,
                 algorithms.toArray(new String[0]));
 
-        Parameter p6 = new Parameter(PARAM_ALGORITHM_AGENT_3,
+        Parameter p7 = new Parameter(PARAM_ALGORITHM_AGENT_3,
                 algorithms.toArray(new String[0]));
 
-        Parameter p7 = new Parameter(PARAM_RUN_COUNT,
+        Parameter p8 = new Parameter(PARAM_RUN_COUNT,
                 "1",
                 "3",
                 "5",
@@ -137,7 +134,7 @@ public class VacuumAgentApp extends IntegrableApplication {
                 "20",
                 "50");
 
-        return Arrays.asList(p1, p2, p3, p4, p5, p6, p7);
+        return Arrays.asList(p1, p2, p3, p4, p5, p6, p7, p8);
     }
 
     private List<String> loadAlgorithmNames() {
@@ -190,9 +187,6 @@ public class VacuumAgentApp extends IntegrableApplication {
         return algorithmNames;
     }
 
-    /**
-     * Is called after each parameter selection change.
-     */
     @Override
     public void initialize() {
         switch (taskPaneCtrl.getParamValueIndex(PARAM_ENV)) {
@@ -208,6 +202,9 @@ public class VacuumAgentApp extends IntegrableApplication {
             case 3:
                 env = new MazeVacuumEnvironment(10, 10, 0.8, 0.3);
                 break;
+            default:
+                env = new MazeVacuumEnvironment(5, 5, 0.5, 0.2);
+                break;
         }
 
         agents.clear();
@@ -216,6 +213,7 @@ public class VacuumAgentApp extends IntegrableApplication {
         agentResultStatuses.clear();
 
         int numberOfAgents = Integer.parseInt(taskPaneCtrl.getParamValue(PARAM_AGENT_COUNT).toString());
+        VacuumAgentMode selectedMode = getSelectedAgentMode();
 
         String algorithmAgent1 = taskPaneCtrl.getParamValue(PARAM_ALGORITHM_AGENT_1).toString();
         String algorithmAgent2 = taskPaneCtrl.getParamValue(PARAM_ALGORITHM_AGENT_2).toString();
@@ -225,27 +223,46 @@ public class VacuumAgentApp extends IntegrableApplication {
         int startX = env.getX(startLocation);
         int startY = env.getY(startLocation);
 
-        VacuumLayeredDirtManager.initialize(env, numberOfAgents);
+        VacuumLayeredDirtManager.reset();
+
+        if (selectedMode == VacuumAgentMode.HYBRID_LAYERED) {
+            VacuumLayeredDirtManager.initialize(env, numberOfAgents);
+        }
 
         if (numberOfAgents >= 1) {
-            SimpleAgent<VacuumPercept, Action> agent1 = createSelectedAgent(algorithmAgent1, 0, startX, startY);
+            SimpleAgent<VacuumPercept, Action> agent1 =
+                    createSelectedAgent(algorithmAgent1, 0, startX, startY, selectedMode);
+
             agents.add(agent1);
-            selectedAlgorithms.add(algorithmAgent1);
-            VacuumLayeredDirtManager.registerAgent(agent1, 0);
+            selectedAlgorithms.add(algorithmAgent1 + " / " + selectedMode.name());
+
+            if (selectedMode == VacuumAgentMode.HYBRID_LAYERED) {
+                VacuumLayeredDirtManager.registerAgent(agent1, 0);
+            }
         }
 
         if (numberOfAgents >= 2) {
-            SimpleAgent<VacuumPercept, Action> agent2 = createSelectedAgent(algorithmAgent2, 1, startX, startY);
+            SimpleAgent<VacuumPercept, Action> agent2 =
+                    createSelectedAgent(algorithmAgent2, 1, startX, startY, selectedMode);
+
             agents.add(agent2);
-            selectedAlgorithms.add(algorithmAgent2);
-            VacuumLayeredDirtManager.registerAgent(agent2, 1);
+            selectedAlgorithms.add(algorithmAgent2 + " / " + selectedMode.name());
+
+            if (selectedMode == VacuumAgentMode.HYBRID_LAYERED) {
+                VacuumLayeredDirtManager.registerAgent(agent2, 1);
+            }
         }
 
         if (numberOfAgents >= 3) {
-            SimpleAgent<VacuumPercept, Action> agent3 = createSelectedAgent(algorithmAgent3, 2, startX, startY);
+            SimpleAgent<VacuumPercept, Action> agent3 =
+                    createSelectedAgent(algorithmAgent3, 2, startX, startY, selectedMode);
+
             agents.add(agent3);
-            selectedAlgorithms.add(algorithmAgent3);
-            VacuumLayeredDirtManager.registerAgent(agent3, 2);
+            selectedAlgorithms.add(algorithmAgent3 + " / " + selectedMode.name());
+
+            if (selectedMode == VacuumAgentMode.HYBRID_LAYERED) {
+                VacuumLayeredDirtManager.registerAgent(agent3, 2);
+            }
         }
 
         for (int i = 0; i < agents.size(); i++) {
@@ -267,10 +284,19 @@ public class VacuumAgentApp extends IntegrableApplication {
         }
     }
 
+    private VacuumAgentMode getSelectedAgentMode() {
+        try {
+            return VacuumAgentMode.valueOf(taskPaneCtrl.getParamValue(PARAM_AGENT_MODE).toString());
+        } catch (Exception e) {
+            return VacuumAgentMode.HYBRID_LAYERED;
+        }
+    }
+
     private SimpleAgent<VacuumPercept, Action> createSelectedAgent(String selectedAlgorithm,
                                                                    int agentIndex,
                                                                    int startX,
-                                                                   int startY) {
+                                                                   int startY,
+                                                                   VacuumAgentMode mode) {
         switch (taskPaneCtrl.getParamValueIndex(PARAM_AGENT)) {
             case 0:
                 return new TableDrivenVacuumAgent();
@@ -285,10 +311,10 @@ public class VacuumAgentApp extends IntegrableApplication {
             case 5:
                 return new RandomWalkVacuumAgent();
             case 6:
-                return new SmartMazeVacuumAgent(selectedAlgorithm, agentIndex, startX, startY);
+                return new SmartMazeVacuumAgent(selectedAlgorithm, agentIndex, startX, startY, mode);
+            default:
+                return new SmartMazeVacuumAgent(selectedAlgorithm, agentIndex, startX, startY, mode);
         }
-
-        return new SmartMazeVacuumAgent(selectedAlgorithm, agentIndex, startX, startY);
     }
 
     private String getSharedStartLocation() {
@@ -332,9 +358,6 @@ public class VacuumAgentApp extends IntegrableApplication {
         }
     }
 
-    /**
-     * Starts the experiment.
-     */
     public void startExperiment() {
         int totalRunCount = getSelectedRunCount();
 
@@ -416,13 +439,16 @@ public class VacuumAgentApp extends IntegrableApplication {
         for (SimpleAgent<VacuumPercept, Action> currentAgent : agents) {
             if (currentAgent instanceof NondeterministicSearchAgent) {
                 NondeterministicProblem<VacuumEnvironmentState, Action> problem =
-                        new NondeterministicProblem<>(env.getCurrentState(),
+                        new NondeterministicProblem<>(
+                                env.getCurrentState(),
                                 VacuumWorldFunctions::getActions,
                                 VacuumWorldFunctions.createResultsFunctionFor(currentAgent),
                                 VacuumWorldFunctions::testGoal,
-                                (s, a, sPrimed) -> 1.0);
-                // Set the problem now for this kind of agent
-                ((NondeterministicSearchAgent<VacuumPercept, VacuumEnvironmentState, Action>) currentAgent).makePlan(problem);
+                                (s, a, sPrimed) -> 1.0
+                        );
+
+                ((NondeterministicSearchAgent<VacuumPercept, VacuumEnvironmentState, Action>) currentAgent)
+                        .makePlan(problem);
             }
         }
 
@@ -587,7 +613,11 @@ public class VacuumAgentApp extends IntegrableApplication {
                 if (smartAgent.hasCompletedOwnDirt()) {
                     setAgentFinished(i, elapsedTimeMs, "Finished");
                 } else if (smartAgent.hasNoMorePossibleMoves()) {
-                    setAgentFinished(i, elapsedTimeMs, "No more possible moves");
+                    if (smartAgent.getMode() == VacuumAgentMode.FULL_ONLINE) {
+                        setAgentFinished(i, elapsedTimeMs, "Exploration finished");
+                    } else {
+                        setAgentFinished(i, elapsedTimeMs, "No more possible moves");
+                    }
                 } else {
                     if (i < agentResultStatuses.size()) {
                         agentResultStatuses.set(i, "Running");

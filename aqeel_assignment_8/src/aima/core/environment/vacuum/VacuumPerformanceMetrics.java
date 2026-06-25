@@ -66,11 +66,11 @@ public class VacuumPerformanceMetrics {
                 Label headingLabel = new Label("Agent " + (i + 1));
                 headingLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
-                Label algorithmLabel = new Label("Algorithm: " + selectedAlgorithms.get(i));
+                Label algorithmLabel = new Label("Algorithm / Mode: " + selectedAlgorithms.get(i));
                 Label stepLabel = new Label("Steps: 0");
                 Label moveLabel = new Label("Moves: 0");
                 Label suckLabel = new Label("Suck Actions: 0");
-                Label cleanedLabel = new Label("Own Dirt Cleaned: 0");
+                Label cleanedLabel = new Label("Cleaned Dirt: 0");
                 Label timeLabel = new Label("Time: 0 ms");
                 Label performanceLabel = new Label("Performance: 0.0");
                 Label resultLabel = new Label("Result: Running");
@@ -141,7 +141,7 @@ public class VacuumPerformanceMetrics {
             }
 
             int agentBoxHeight = showAverageSection ? 360 : 155;
-            Scene scene = new Scene(root, 500, 220 + agents.size() * agentBoxHeight);
+            Scene scene = new Scene(root, 540, 220 + agents.size() * agentBoxHeight);
             stage.setScene(scene);
             stage.show();
         });
@@ -158,7 +158,7 @@ public class VacuumPerformanceMetrics {
                 int steps = 0;
                 int moves = 0;
                 int sucks = 0;
-                int cleaned = VacuumLayeredDirtManager.getCleanedLayers(i);
+                int cleaned = 0;
                 double performance = env.getPerformanceMeasure(agent);
 
                 if (agent instanceof SmartMazeVacuumAgent) {
@@ -167,7 +167,10 @@ public class VacuumPerformanceMetrics {
                     steps = smartAgent.getStepCount();
                     moves = smartAgent.getMoveCount();
                     sucks = smartAgent.getSuckCount();
+                    cleaned = smartAgent.getCleanedCount();
                     performance = smartAgent.getOriginalStylePerformance();
+                } else if (VacuumLayeredDirtManager.isInitialized()) {
+                    cleaned = VacuumLayeredDirtManager.getCleanedLayers(i);
                 }
 
                 long displayedTimeMs = 0;
@@ -186,7 +189,7 @@ public class VacuumPerformanceMetrics {
                     stepLabels.get(i).setText("Steps: " + steps);
                     moveLabels.get(i).setText("Moves: " + moves);
                     suckLabels.get(i).setText("Suck Actions: " + sucks);
-                    cleanedLabels.get(i).setText("Own Dirt Cleaned: " + cleaned);
+                    cleanedLabels.get(i).setText("Cleaned Dirt: " + cleaned);
                     timeLabels.get(i).setText("Time: " + displayedTimeMs + " ms");
                     performanceLabels.get(i).setText("Performance: " + performance);
                     resultLabels.get(i).setText("Result: " + resultStatus);

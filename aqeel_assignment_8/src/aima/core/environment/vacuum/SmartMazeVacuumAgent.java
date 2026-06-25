@@ -3,7 +3,6 @@ package aima.core.environment.vacuum;
 import aima.core.agent.Action;
 import aima.core.agent.impl.SimpleAgent;
 import aima.core.environment.vacuum.VacuumEnvironment.LocationState;
-import aima.core.environment.vacuum.VacuumPercept;
 import aima.core.environment.vacuum.algorithms.Depth_First_Search;
 import aima.core.environment.vacuum.algorithms.MazeSearchAlgorithm;
 
@@ -16,13 +15,19 @@ import java.util.Stack;
 import static aima.core.environment.vacuum.MazeVacuumEnvironment.*;
 
 /**
- * This vacuum agent tries to clean up a checkerboard-like world of squares. Percepts inform
- * the agent about the state of the current square and about possible next movement directions.
- * A simple random walk strategy is used.
+ * Smart maze vacuum agent.
  *
- * @author Ruediger Lunde
+ * HYBRID_LAYERED:
+ * Uses VacuumLayeredDirtManager for layered multi-agent dirt tracking.
+ *
+ * FULL_ONLINE:
+ * Does not use global dirt knowledge.
+ * The agent only reacts to the current percept and explores with the selected algorithm.
  */
 public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
+
+    private final VacuumAgentMode mode;
+    private int onlineCleanedCount = 0;
 
     private final String algorithm;
     private final MazeSearchAlgorithm searchAlgorithm;
@@ -54,10 +59,19 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
     }
 
     public SmartMazeVacuumAgent(String algorithm, int agentIndex, int startX, int startY) {
+        this(algorithm, agentIndex, startX, startY, VacuumAgentMode.HYBRID_LAYERED);
+    }
+
+    public SmartMazeVacuumAgent(String algorithm,
+                                int agentIndex,
+                                int startX,
+                                int startY,
+                                VacuumAgentMode mode) {
         this.algorithm = algorithm;
         this.agentIndex = agentIndex;
         this.x = startX;
         this.y = startY;
+        this.mode = mode;
         this.searchAlgorithm = createSearchAlgorithm(algorithm);
     }
 
@@ -72,16 +86,16 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
         visited.add(key(x, y));
 
         String currentLocation = percept.getCurrLocation();
-
         Action action;
 
-        if (VacuumLayeredDirtManager.isInitialized()
-                && VacuumLayeredDirtManager.hasDirtForAgent(agentIndex, currentLocation)) {
-            VacuumLayeredDirtManager.cleanDirtForAgent(agentIndex, currentLocation);
+        if (shouldSuckCurrentSquare(percept, currentLocation)) {
             action = ACTION_SUCK;
-        } else if (!VacuumLayeredDirtManager.isInitialized()
-                && percept.getCurrState() == LocationState.Dirty) {
-            action = ACTION_SUCK;
+            suckCount++;
+
+            if (mode == VacuumAgentMode.FULL_ONLINE) {
+                onlineCleanedCount++;
+            }
+
         } else {
             action = searchAlgorithm.selectAction(percept, x, y, visited, backtrackStack);
 
@@ -91,18 +105,11 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
                 return Optional.empty();
             }
 
-            if (action == ACTION_MOVE_UP ||
-                    action == ACTION_MOVE_DOWN ||
-                    action == ACTION_MOVE_LEFT ||
-                    action == ACTION_MOVE_RIGHT) {
+            if (isMovementAction(action)) {
                 updatePosition(action);
                 lastMoveAction = action;
                 moveCount++;
             }
-        }
-
-        if (action == ACTION_SUCK) {
-            suckCount++;
         }
 
         stepCount++;
@@ -112,12 +119,36 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
         return Optional.of(action);
     }
 
+    private boolean shouldSuckCurrentSquare(VacuumPercept percept, String currentLocation) {
+        if (mode == VacuumAgentMode.HYBRID_LAYERED) {
+            if (VacuumLayeredDirtManager.isInitialized()
+                    && VacuumLayeredDirtManager.hasDirtForAgent(agentIndex, currentLocation)) {
+                VacuumLayeredDirtManager.cleanDirtForAgent(agentIndex, currentLocation);
+                return true;
+            }
+
+            return !VacuumLayeredDirtManager.isInitialized()
+                    && percept.getCurrState() == LocationState.Dirty;
+        }
+
+        if (mode == VacuumAgentMode.FULL_ONLINE) {
+            return percept.getCurrState() == LocationState.Dirty;
+        }
+
+        return false;
+    }
+
     public void finishIfOwnDirtCleaned() {
-        if (VacuumLayeredDirtManager.isInitialized()
+        if (mode == VacuumAgentMode.HYBRID_LAYERED
+                && VacuumLayeredDirtManager.isInitialized()
                 && !VacuumLayeredDirtManager.hasRemainingDirtForAgent(agentIndex)) {
             completedOwnDirt = true;
             finished = true;
         }
+    }
+
+    public VacuumAgentMode getMode() {
+        return mode;
     }
 
     public int getAgentIndex() {
@@ -136,6 +167,18 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
         return suckCount;
     }
 
+    public int getOnlineCleanedCount() {
+        return onlineCleanedCount;
+    }
+
+    public int getCleanedCount() {
+        if (mode == VacuumAgentMode.HYBRID_LAYERED) {
+            return VacuumLayeredDirtManager.getCleanedLayers(agentIndex);
+        }
+
+        return onlineCleanedCount;
+    }
+
     public boolean isFinished() {
         return finished;
     }
@@ -148,12 +191,16 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
         return noMorePossibleMoves;
     }
 
+    public double getCustomPerformance() {
+        return getCleanedCount() * 10.0 - moveCount;
+    }
+
     public double getOriginalStylePerformance() {
-        return VacuumLayeredDirtManager.getCleanedLayers(agentIndex) * 10.0 - moveCount;
+        return getCustomPerformance();
     }
 
     public double getLayeredPerformance() {
-        return getOriginalStylePerformance();
+        return getCustomPerformance();
     }
 
     private MazeSearchAlgorithm createSearchAlgorithm(String algorithm) {
@@ -165,6 +212,13 @@ public class SmartMazeVacuumAgent extends SimpleAgent<VacuumPercept, Action> {
         } catch (Exception e) {
             return new Depth_First_Search();
         }
+    }
+
+    private boolean isMovementAction(Action action) {
+        return action == ACTION_MOVE_UP
+                || action == ACTION_MOVE_DOWN
+                || action == ACTION_MOVE_LEFT
+                || action == ACTION_MOVE_RIGHT;
     }
 
     private String key(int x, int y) {
